@@ -8,4 +8,17 @@ void main() {
   String text = '   Flutter Developer   ';
   String result = text.trim().toUpperCase();
   print(result);
+
+  List<String> products = ['Молоко', 'Хлеб'];
+  products.add('Сыр');
+  products.remove('Хлеб');
+  print('В корзине: ${products.length} шт.');
+
+   for (var i = 0; i <= 10; i++){
+    i.isEven ? print('$i чётное') : print('$i');
+  }
+
 }
+
+
+
