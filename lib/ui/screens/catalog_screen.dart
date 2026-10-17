@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../domain/entities/game.dart';
 import '../widgets/game_card.dart';
 
