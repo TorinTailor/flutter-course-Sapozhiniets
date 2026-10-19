@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 
 enum GameCategory {
+  empty(
+    label: '- empty -',
+    color: Color(0xFFB0B0B0),
+    borderColor: Color(0xFF282828),
+    textColor: Color(0xFF000000),
+    icon: Icons.person,
+  ),
   action(
     label: 'Экшен',
     color: Color(0xFFF0B3B3),
@@ -88,15 +95,13 @@ enum GameCategory {
 }
 
 class Game {
-  final int id;
+  final String id;
   final String title;
   final String subtitle;
   final Set<GameCategory> categories;
   //final List<String> tags;
   final String imageAsset;
   final Color accentColor;
-  //final Color imageBackgroundColor;
-  final String? description;
 
   const Game({
     required this.id,
@@ -106,7 +111,34 @@ class Game {
     //required this.tags,
     required this.imageAsset,
     required this.accentColor,
-    //this.imageBackgroundColor = const Color(0xFF4FAE27),
-    this.description,
   });
+
+  factory Game.fromJson(Map<String, dynamic> json) {
+    return Game(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      subtitle: json['subtitle'] as String,
+      categories: (json['category'] as List<dynamic>)
+          .map((value) => GameCategory.values.byName(value as String))
+          .toSet(),
+      imageAsset: json['image'] as String,
+      accentColor: Color(
+        int.parse('FF${json['accentColor'] as String}', radix: 16),
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'subtitle': subtitle,
+      'category': categories.map((category) => category.name).toList(),
+      'image': imageAsset,
+      'accentColor': accentColor.value
+          .toRadixString(16)
+          .padLeft(8, '0')
+          .substring(2)
+          .toUpperCase(),
+    };
+  }
 }
