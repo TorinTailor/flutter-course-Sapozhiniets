@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/game.dart';
+
+import 'game_category_style.dart';
 
 class GameCard extends StatelessWidget {
   final Game game;
@@ -30,12 +33,15 @@ class GameCard extends StatelessWidget {
                 width: 90,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(width: 3, color: game.accentColor),
+                  border: Border.all(
+                    width: 3,
+                    color: colorFromHex(game.accentColor),
+                  ),
                 ),
                 child: Image.asset(game.imageAsset),
               ),
               Positioned(
-                left: 55,
+                right: 4,
                 top: 5,
                 child: InkWell(
                   onTap: onLikeTap,
@@ -79,35 +85,43 @@ class GameCard extends StatelessWidget {
                   spacing: 5,
                   runSpacing: 5,
                   children: [
-                    for (final c in game.categories)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: c.color,
-                          border: Border.all(color: c.borderColor, width: 2),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(c.icon, size: 14, color: c.textColor),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                c.label,
-                                style: TextStyle(
-                                  color: c.textColor,
-                                  fontSize: 13,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                    for (final category in game.categories)
+                      Builder(
+                        builder: (context) {
+                          final c = category.style;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
                             ),
-                          ],
-                        ),
+                            decoration: BoxDecoration(
+                              color: c.color,
+                              border: Border.all(
+                                color: c.borderColor,
+                                width: 2,
+                              ),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(c.icon, size: 14, color: c.textColor),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    c.label,
+                                    style: TextStyle(
+                                      color: c.textColor,
+                                      fontSize: 13,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                   ],
                 ),
