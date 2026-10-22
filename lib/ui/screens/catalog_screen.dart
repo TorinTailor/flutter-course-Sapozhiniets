@@ -86,7 +86,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       subtitle: 'Добавлено пользователем. В состоянии модерации.',
       categories: {GameCategory.empty},
       imageAsset: 'assets/empty.png',
-      accentColor: const Color(0xFF000000),
+      accentColor: '000000',
     );
 
     try {
