@@ -19,21 +19,24 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Center(
         child: Column(
           children: [
-            SizedBox(height: 70,),
+            SizedBox(height: 70),
             //Padding(padding: EdgeInsetsGeometry.only(top: 70, left: 30, right: 30)),
-            TextField(
-              
-              decoration: InputDecoration(
-                labelText: 'Email',
-                hintText: 'you@exampie.com',
-                //errorText: 'Это обязательное поле',
-                border: OutlineInputBorder(),
-                enabledBorder: OutlineInputBorder(),
-                focusedBorder: OutlineInputBorder(),
+            Container(
+              padding: EdgeInsetsGeometry.only(left: 30, right: 30),
+              child: TextField(
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'you@exampie.com',
+                  //errorText: 'Это обязательное поле',
+                  border: OutlineInputBorder(),
+                  enabledBorder: OutlineInputBorder(),
+                  focusedBorder: OutlineInputBorder(),
+                ),
+                controller: loginController,
               ),
-              controller: loginController,
             ),
-            SizedBox(height: 10,),
+
+            SizedBox(height: 10),
             TextField(controller: passwordController, obscureText: true),
             if (error != null) Text(error!),
             /*
