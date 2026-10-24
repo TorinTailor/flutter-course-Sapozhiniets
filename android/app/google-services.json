@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "387073914169",
+    "project_id": "gamecatalog-2682c",
+    "storage_bucket": "gamecatalog-2682c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387073914169:android:9b28870eda6603f5ba24e8",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgBzhsQjpPRTGcSo1S3DeRw465m3IGb3Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
