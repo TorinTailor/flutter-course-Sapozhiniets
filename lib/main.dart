@@ -1,8 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_application_1/firebase_options.dart';
 import 'package:flutter/material.dart';
-//import 'ui/screens/catalog_screen.dart';
+import 'ui/screens/catalog_screen.dart';
 import 'ui/screens/login_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MainApp());
 }
 
@@ -11,9 +16,12 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    final user = FirebaseAuth.instance.currentUser;
+    print(user);
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: LoginScreen(),
+      home: user == null ? LoginScreen() : CatalogScreen(),
+      //home: LoginScreen(),
       //home: CatalogScreen(),
     );
   }

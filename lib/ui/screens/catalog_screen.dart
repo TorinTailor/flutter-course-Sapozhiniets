@@ -1,12 +1,20 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/ui/screens/login_screen.dart';
 import 'package:http/http.dart' as http;
 
 import '../../domain/entities/game.dart';
 import '../widgets/game_card.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+//import 'package:firebase_core/firebase_core.dart';
+//Text(FirebaseAuth.instance.currentUser?.email ?? '-')  TODO 1: Это задел на будущий экран профиля пока пусть будет тут
+
+
 const baseUrl = 'https://6ad492ee48476c0785d91f20.mockapi.io';
+
+
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -197,6 +205,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       icon: const Icon(Icons.refresh),
                       onPressed: _isLoading ? null : _loadGames,
                   ),
+                  SizedBox(width: 5,),
+                  ElevatedButton(onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                    if (!context.mounted) return;
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LoginScreen()));
+                  }, child: Text('Выйти'))
                 ],
               ),
             ),
