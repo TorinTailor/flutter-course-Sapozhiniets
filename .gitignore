@@ -53,3 +53,6 @@ app.*.map.json
 firebase-debug.log
 # ключи сервисного аккаунта
 *-firebase-adminsdk-*.json
+
+# чистка непроектных доков
+/lib/lessons
