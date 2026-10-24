@@ -55,4 +55,4 @@ firebase-debug.log
 *-firebase-adminsdk-*.json
 
 # чистка непроектных доков
-/lib/lessons
+lib/lessons
