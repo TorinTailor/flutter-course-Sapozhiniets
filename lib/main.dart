@@ -11,18 +11,28 @@ void main() async {
   runApp(const MainApp());
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   const MainApp({super.key});
 
   @override
+  State<MainApp> createState() => _MainAppStaae();
+}
+
+class _MainAppStaae extends State<MainApp> {
+
+  @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    print(user);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: user == null ? LoginScreen() : CatalogScreen(),
-      //home: LoginScreen(),
-      //home: CatalogScreen(),
+      home: StreamBuilder(stream: FirebaseAuth.instance.authStateChanges(), builder: (context, snapshot) {
+        if(snapshot.connectionState == ConnectionState.waiting){
+          return CircularProgressIndicator();
+        }
+        if(snapshot.data == null){
+          return LoginScreen();
+        }
+        return CatalogScreen();
+      })
     );
   }
 }
