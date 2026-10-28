@@ -1,81 +1,16 @@
 import 'package:flutter/material.dart';
+
 import '../../domain/entities/game.dart';
 import '../widgets/game_card.dart';
 
-const List<Game> _games = [
-  Game(
-    id: 1,
-    title: "No Man's Sky",
-    subtitle: 'Hello Games - 2016',
-    categories: {
-      GameCategory.space,
-      GameCategory.openWorld,
-      GameCategory.simulator,
-    },
-    imageAsset: 'assets/01.png',
-    accentColor: Color(0xFF4FAE27),
-  ),
-  Game(
-    id: 2,
-    title: 'Factorio',
-    subtitle: 'Wube Software STD - 2020',
-    categories: {GameCategory.automation, GameCategory.factoryBuilding},
-    imageAsset: 'assets/02.png',
-    accentColor: Color(0xFF715731),
-  ),
-  Game(
-    id: 3,
-    title: 'Mass Effect™ Legendary Edition',
-    subtitle: 'Elecronic Art - 2021',
-    categories: {GameCategory.deepStory, GameCategory.rpg, GameCategory.space},
-    imageAsset: 'assets/03.png',
-    accentColor: Color(0xFF1E00C9),
-  ),
-  Game(
-    id: 4,
-    title: 'Darksiders III Deluxe Edition',
-    subtitle: 'THQ Nordic - 2018',
-    categories: {GameCategory.slasher, GameCategory.action},
-    imageAsset: 'assets/05.png',
-    accentColor: Color(0xFF321C09),
-  ),
-  Game(
-    id: 5,
-    title: 'Detroit: Become Human',
-    subtitle: 'Quantic Dream - 2020',
-    categories: {GameCategory.deepStory, GameCategory.choicesMatter},
-    imageAsset: 'assets/06.png',
-    accentColor: Color(0xFFC0B6F5),
-  ),
-  Game(
-    id: 6,
-    title: 'The Elder Scrolls V: Skyrim Special Edition',
-    subtitle: 'Bethesda Softworks - 2016',
-    categories: {GameCategory.openWorld, GameCategory.rpg},
-    imageAsset: 'assets/07.png',
-    accentColor: Color(0xFF000000),
-  ),
-  Game(
-    id: 7,
-    title: 'The Witcher 3: Wild Hunt — Remastered',
-    subtitle: 'CD PROJEKT RED - 2015',
-    categories: {
-      GameCategory.openWorld,
-      GameCategory.rpg,
-      GameCategory.deepStory,
-    },
-    imageAsset: 'assets/04.png',
-    accentColor: Color(0xFF3EBDEF),
-  ),
-  Game(
-    id: 8,
-    title: 'Kerbal Space Program: Complete Edition',
-    subtitle: 'Private Division - 2015',
-    categories: {GameCategory.space, GameCategory.simulator},
-    imageAsset: 'assets/08.png',
-    accentColor: Color(0xFF1F1748),
-  ),
-];
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+//import 'package:firebase_core/firebase_core.dart'; TODO 1: Это задел на будущий экран профиля пока пусть будет тут
+//Text(FirebaseAuth.instance.currentUser?.email ?? '-')
+//Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfilScreen()));
+
+final db = FirebaseFirestore.instance;
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -85,100 +20,341 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  final Set<int> _likedIds = {};
-  bool _onlyFavorites = false;
+  // final Set<String> _likedIds = {};
+  final TextEditingController _titleController = TextEditingController();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _itemsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _favoritesStream;
 
-  void _toggleLike(int id) {
+  late int count;
+  bool _isSubmitting = false;
+  bool _onlyFavorites = false;
+  bool _showForm = false;
+  String? _titleError;
+  String? _nickname;
+  int _visibleGamesCount = 0;
+  int _favoritesCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _itemsStream = FirebaseFirestore.instance.collection('games').snapshots();
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    _favoritesStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .snapshots();
+
+    _loadUserNickname(uid);
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitGame() async {
+    final title = _titleController.text.trim();
+
+    if (title.isEmpty) {
+      setState(() => _titleError = 'Введите название игры');
+      return;
+    }
+
     setState(() {
-      if (_likedIds.contains(id)) {
-        _likedIds.remove(id);
-      } else {
-        _likedIds.add(id);
-      }
+      _titleError = null;
+      _isSubmitting = true;
     });
+
+    final game = Game(
+      id: '',
+      title: title,
+      subtitle: 'Добавлено пользователем. В состоянии модерации.',
+      categories: {GameCategory.empty},
+      imageAsset: 'assets/empty.png',
+      accentColor: '000000',
+    );
+
+    try {
+      await FirebaseFirestore.instance.collection('games').add(game.toJson());
+
+      if (!mounted) return;
+
+      setState(() {
+        _titleController.clear();
+        _showForm = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Не удалось добавить игру: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _loadUserNickname(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (doc.exists && mounted) {
+        setState(() {
+          _nickname = doc.data()?['nickname'] as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint('Ошибка при загрузке никнейма: $e');
+    }
+  }
+
+  Future<void> _toggleLike(String itemId, bool isLiked) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    final fav = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .doc(itemId);
+
+    try {
+      if (isLiked) {
+        await fav.delete();
+      } else {
+        await fav.set({'liked': true});
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось изменить избранное: $e')),
+      );
+    }
+  }
+
+  Future<int?> gamesCount() async {
+    final collectionRef = FirebaseFirestore.instance.collection('games');
+    final snapshot = await collectionRef.count().get();
+
+    return snapshot.count;
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Game> visibleGames;
-    if (_onlyFavorites) {
-      visibleGames = _games.where((g) => _likedIds.contains(g.id)).toList();
-    } else {
-      visibleGames = _games;
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFFBF1DF),
       appBar: AppBar(
-        toolbarHeight: 60,
+        toolbarHeight: 70,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Библиотека игр',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
+            Text(
+              _nickname != null && _nickname!.isNotEmpty
+                  ? 'Библиотека игр ($_nickname)'
+                  : 'Библиотека игр',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
-              'В библиотеке игр: ${_games.length} \u00B7 В избранном: ${_likedIds.length}',
+              'В библиотеке: $_visibleGamesCount · В избранном: $_favoritesCount',
               style: const TextStyle(fontSize: 15),
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            padding: EdgeInsets.only(right: 20),
+            tooltip: _showForm ? 'Скрыть форму' : 'Добавить игру',
+            icon: Icon(_showForm ? Icons.close : Icons.add),
+            onPressed: _isSubmitting
+                ? null
+                : () => setState(() => _showForm = !_showForm),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
+            if (_showForm) _buildForm(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
               child: Row(
                 children: [
-                  FilterChip(
-                    showCheckmark: false,
-                    avatar: _onlyFavorites
-                        ? const Icon(Icons.favorite, color: Colors.red)
-                        : const Icon(Icons.favorite_border),
-                    shape: StadiumBorder(),
-                    label: const Text('Только избранные'),
-                    labelStyle: TextStyle(
-                      color: _onlyFavorites ? Colors.green : Colors.black87,
+                  Flexible(
+                    child: FilterChip(
+                      showCheckmark: false,
+                      avatar: _onlyFavorites
+                          ? const Icon(Icons.favorite, color: Colors.red)
+                          : const Icon(Icons.favorite_border),
+                      shape: const StadiumBorder(),
+                      label: const Text('Только избранные'),
+                      labelStyle: TextStyle(
+                        color: _onlyFavorites ? Colors.green : Colors.black87,
+                      ),
+                      selectedColor: const Color(0xFFB9CDBA),
+                      side: BorderSide(
+                        color: _onlyFavorites
+                            ? const Color(0xFFB9CDBA)
+                            : Colors.grey,
+                      ),
+                      selected: _onlyFavorites,
+                      onSelected: (value) =>
+                          setState(() => _onlyFavorites = value),
                     ),
-                    selectedColor: const Color(0xFFB9CDBA),
-                    side: BorderSide(
-                      color: _onlyFavorites ? Color(0xFFB9CDBA) : Colors.grey,
-                    ),
-                    selected: _onlyFavorites,
-                    onSelected: (v) => setState(() => _onlyFavorites = v),
+                  ),
+
+                  SizedBox(width: 5),
+
+                  ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                    },
+                    child: Text('Выйти'),
                   ),
                 ],
               ),
             ),
-            Expanded(
-              child: visibleGames.isEmpty
-                  ? const Center(child: Text('Ничего не нашлось'))
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(
-                        top: 5,
-                        left: 15,
-                        right: 15,
-                        bottom: 15,
-                      ),
-                      itemCount: visibleGames.length,
-                      itemBuilder: (context, index) {
-                        final game = visibleGames[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: GameCard(
-                            game: game,
-                            isLiked: _likedIds.contains(game.id),
-                            onLikeTap: () => _toggleLike(game.id),
-                          ),
-                        );
-                      },
-                    ),
-            ),
+            Expanded(child: _buildCatalog()),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildForm() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(15, 12, 15, 0),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _titleController,
+                  enabled: !_isSubmitting,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _isSubmitting ? null : _submitGame(),
+                  decoration: InputDecoration(
+                    labelText: 'Название',
+                    errorText: _titleError,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: _isSubmitting ? null : _submitGame,
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Отправить'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCatalog() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _itemsStream,
+      builder: (context, itemsSnapshot) {
+        if (itemsSnapshot.hasError) {
+          return Center(
+            child: Text('Ошибка загрузки каталога: ${itemsSnapshot.error}'),
+          );
+        }
+
+        if (itemsSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final games = itemsSnapshot.data!.docs
+            .map((doc) => Game.fromFirestore(doc))
+            .toList();
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _favoritesStream,
+          builder: (context, favoritesSnapshot) {
+            if (favoritesSnapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Ошибка загрузки избранного: '
+                  '${favoritesSnapshot.error}',
+                ),
+              );
+            }
+
+            if (favoritesSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final likedIds = favoritesSnapshot.data!.docs
+                .map((doc) => doc.id)
+                .toSet();
+
+            final visibleGames = _onlyFavorites
+                ? games.where((game) => likedIds.contains(game.id)).toList()
+                : games;
+
+            if (_visibleGamesCount != visibleGames.length ||
+                _favoritesCount != likedIds.length) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _visibleGamesCount = visibleGames.length;
+                    _favoritesCount = likedIds.length;
+                  });
+                }
+              });
+            }
+
+            if (visibleGames.isEmpty) {
+              return const Center(child: Text('Ничего не нашлось'));
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.only(
+                top: 5,
+                left: 15,
+                right: 15,
+                bottom: 15,
+              ),
+              itemCount: visibleGames.length,
+              itemBuilder: (context, index) {
+                final game = visibleGames[index];
+                final isLiked = likedIds.contains(game.id);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GameCard(
+                    game: game,
+                    isLiked: isLiked,
+                    onLikeTap: () => _toggleLike(game.id, isLiked),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
