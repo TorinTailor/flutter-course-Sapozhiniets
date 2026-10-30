@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-//import 'package:flutter/foundation.dart';
 
 enum GameCategory {
   empty,
@@ -17,7 +16,6 @@ enum GameCategory {
 
 class Game {
   final String id;
-  //final String userId;
   final String title;
   final String subtitle;
   final Set<GameCategory> categories;
@@ -26,7 +24,6 @@ class Game {
 
   const Game({
     required this.id,
-    //required this.userId,
     required this.title,
     required this.subtitle,
     required this.categories,
@@ -37,7 +34,6 @@ class Game {
   factory Game.fromJson(Map<String, dynamic> json) {
     return Game(
       id: json['id'] as String,
-      //userId: json['userId'] as String,
       title: json['title'] as String,
       subtitle: json['subtitle'] as String,
       categories: (json['category'] as List<dynamic>)
