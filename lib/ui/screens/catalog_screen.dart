@@ -1,12 +1,16 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../../domain/entities/game.dart';
 import '../widgets/game_card.dart';
 
-const baseUrl = 'https://6ad492ee48476c0785d91f20.mockapi.io';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+//import 'package:firebase_core/firebase_core.dart'; TODO 1: Это задел на будущий экран профиля пока пусть будет тут
+//Text(FirebaseAuth.instance.currentUser?.email ?? '-')
+//Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfilScreen()));
+
+final db = FirebaseFirestore.instance;
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -16,21 +20,35 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  final Set<String> _likedIds = {};
+  // final Set<String> _likedIds = {};
   final TextEditingController _titleController = TextEditingController();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _itemsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _favoritesStream;
 
-  List<Game> _games = [];
-  bool _onlyFavorites = false;
-  bool _isLoading = true;
+  late int count;
   bool _isSubmitting = false;
+  bool _onlyFavorites = false;
   bool _showForm = false;
-  String? _loadError;
   String? _titleError;
+  String? _nickname;
+  int _visibleGamesCount = 0;
+  int _favoritesCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadGames();
+
+    _itemsStream = FirebaseFirestore.instance.collection('games').snapshots();
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    _favoritesStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .snapshots();
+
+    _loadUserNickname(uid);
   }
 
   @override
@@ -39,37 +57,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
     super.dispose();
   }
 
-  Future<void> _loadGames() async {
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-    });
-
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/games'));
-      if (response.statusCode != 200) {
-        throw Exception('Статус ${response.statusCode}');
-      }
-
-      final items = jsonDecode(response.body) as List<dynamic>;
-      final games = items
-          .map((item) => Game.fromJson(item as Map<String, dynamic>))
-          .toList();
-
-      if (!mounted) return;
-      setState(() => _games = games);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _loadError = 'Не удалось загрузить каталог: $error');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   Future<void> _submitGame() async {
     final title = _titleController.text.trim();
+
     if (title.isEmpty) {
       setState(() => _titleError = 'Введите название игры');
       return;
@@ -90,29 +80,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
 
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/games'),
-        headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: jsonEncode(game.toJson()),
-      );
-      if (response.statusCode != 201) {
-        throw Exception('Статус ${response.statusCode}');
-      }
+      await FirebaseFirestore.instance.collection('games').add(game.toJson());
 
-      final created = Game.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
-      );
       if (!mounted) return;
+
       setState(() {
-        _games.insert(0, created);
         _titleController.clear();
         _showForm = false;
       });
-    } catch (error) {
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось добавить игру: $error')),
-      );
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Не удалось добавить игру: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -120,22 +101,56 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
-  void _toggleLike(String id) {
-    setState(() {
-      if (_likedIds.contains(id)) {
-        _likedIds.remove(id);
-      } else {
-        _likedIds.add(id);
+  Future<void> _loadUserNickname(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (doc.exists && mounted) {
+        setState(() {
+          _nickname = doc.data()?['nickname'] as String?;
+        });
       }
-    });
+    } catch (e) {
+      debugPrint('Ошибка при загрузке никнейма: $e');
+    }
+  }
+
+  Future<void> _toggleLike(String itemId, bool isLiked) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    final fav = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .doc(itemId);
+
+    try {
+      if (isLiked) {
+        await fav.delete();
+      } else {
+        await fav.set({'liked': true});
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось изменить избранное: $e')),
+      );
+    }
+  }
+
+  Future<int?> gamesCount() async {
+    final collectionRef = FirebaseFirestore.instance.collection('games');
+    final snapshot = await collectionRef.count().get();
+
+    return snapshot.count;
   }
 
   @override
   Widget build(BuildContext context) {
-    final visibleGames = _onlyFavorites
-        ? _games.where((game) => _likedIds.contains(game.id)).toList()
-        : _games;
-
     return Scaffold(
       backgroundColor: const Color(0xFFFBF1DF),
       appBar: AppBar(
@@ -143,12 +158,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Библиотека игр',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
+            Text(
+              _nickname != null && _nickname!.isNotEmpty
+                  ? 'Библиотека игр ($_nickname)'
+                  : 'Библиотека игр',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
-              'В библиотеке игр: ${_games.length} · В избранном: ${_likedIds.length}',
+              'В библиотеке: $_visibleGamesCount · В избранном: $_favoritesCount',
               style: const TextStyle(fontSize: 15),
             ),
           ],
@@ -172,35 +191,41 @@ class _CatalogScreenState extends State<CatalogScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
               child: Row(
                 children: [
-                  Flexible(child: FilterChip(
-                    showCheckmark: false,
-                    avatar: _onlyFavorites
-                        ? const Icon(Icons.favorite, color: Colors.red)
-                        : const Icon(Icons.favorite_border),
-                    shape: const StadiumBorder(),
-                    label: const Text('Только избранные'),
-                    labelStyle: TextStyle(
-                      color: _onlyFavorites ? Colors.green : Colors.black87,
+                  Flexible(
+                    child: FilterChip(
+                      showCheckmark: false,
+                      avatar: _onlyFavorites
+                          ? const Icon(Icons.favorite, color: Colors.red)
+                          : const Icon(Icons.favorite_border),
+                      shape: const StadiumBorder(),
+                      label: const Text('Только избранные'),
+                      labelStyle: TextStyle(
+                        color: _onlyFavorites ? Colors.green : Colors.black87,
+                      ),
+                      selectedColor: const Color(0xFFB9CDBA),
+                      side: BorderSide(
+                        color: _onlyFavorites
+                            ? const Color(0xFFB9CDBA)
+                            : Colors.grey,
+                      ),
+                      selected: _onlyFavorites,
+                      onSelected: (value) =>
+                          setState(() => _onlyFavorites = value),
                     ),
-                    selectedColor: const Color(0xFFB9CDBA),
-                    side: BorderSide(
-                      color: _onlyFavorites
-                          ? const Color(0xFFB9CDBA)
-                          : Colors.grey,
-                    ),
-                    selected: _onlyFavorites,
-                    onSelected: (value) =>
-                        setState(() => _onlyFavorites = value),
-                  ),),
-                  IconButton(
-                      tooltip: 'Обновить каталог',
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _isLoading ? null : _loadGames,
+                  ),
+
+                  SizedBox(width: 5),
+
+                  ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                    },
+                    child: Text('Выйти'),
                   ),
                 ],
               ),
             ),
-            Expanded(child: _buildCatalog(visibleGames)),
+            Expanded(child: _buildCatalog()),
           ],
         ),
       ),
@@ -247,52 +272,89 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  Widget _buildCatalog(List<Game> visibleGames) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_loadError != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(_loadError!, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _loadGames,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Обновить'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (visibleGames.isEmpty) {
-      return const Center(child: Text('Ничего не нашлось'));
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadGames,
-      child: ListView.builder(
-        padding: const EdgeInsets.only(top: 5, left: 15, right: 15, bottom: 15),
-        itemCount: visibleGames.length,
-        itemBuilder: (context, index) {
-          final game = visibleGames[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: GameCard(
-              game: game,
-              isLiked: _likedIds.contains(game.id),
-              onLikeTap: () => _toggleLike(game.id),
-            ),
+  Widget _buildCatalog() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _itemsStream,
+      builder: (context, itemsSnapshot) {
+        if (itemsSnapshot.hasError) {
+          return Center(
+            child: Text('Ошибка загрузки каталога: ${itemsSnapshot.error}'),
           );
-        },
-      ),
+        }
+
+        if (itemsSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final games = itemsSnapshot.data!.docs
+            .map((doc) => Game.fromFirestore(doc))
+            .toList();
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _favoritesStream,
+          builder: (context, favoritesSnapshot) {
+            if (favoritesSnapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Ошибка загрузки избранного: '
+                  '${favoritesSnapshot.error}',
+                ),
+              );
+            }
+
+            if (favoritesSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final likedIds = favoritesSnapshot.data!.docs
+                .map((doc) => doc.id)
+                .toSet();
+
+            final visibleGames = _onlyFavorites
+                ? games.where((game) => likedIds.contains(game.id)).toList()
+                : games;
+
+            if (_visibleGamesCount != visibleGames.length ||
+                _favoritesCount != likedIds.length) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _visibleGamesCount = visibleGames.length;
+                    _favoritesCount = likedIds.length;
+                  });
+                }
+              });
+            }
+
+            if (visibleGames.isEmpty) {
+              return const Center(child: Text('Ничего не нашлось'));
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.only(
+                top: 5,
+                left: 15,
+                right: 15,
+                bottom: 15,
+              ),
+              itemCount: visibleGames.length,
+              itemBuilder: (context, index) {
+                final game = visibleGames[index];
+                final isLiked = likedIds.contains(game.id);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GameCard(
+                    game: game,
+                    isLiked: isLiked,
+                    onLikeTap: () => _toggleLike(game.id, isLiked),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

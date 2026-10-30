@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum GameCategory {
   empty,
   action,
@@ -41,6 +43,27 @@ class Game {
       accentColor: json['accentColor'] as String,
     );
   }
+
+factory Game.fromFirestore(
+  DocumentSnapshot<Map<String, dynamic>> doc,
+) {
+  final data = doc.data()!;
+
+  return Game(
+    id: doc.id,
+    title: data['title'] as String? ?? '',
+    subtitle: data['subtitle'] as String? ?? '',
+    categories: (data['category'] as List<dynamic>? ?? [])
+        .map(
+          (value) => GameCategory.values.byName(
+            value as String? ?? '',
+          ),
+        )
+        .toSet(),
+    imageAsset: data['image'] as String? ?? '',
+    accentColor: data['accentColor'] as String? ?? '',
+  );
+}
 
   Map<String, dynamic> toJson() {
     return {
