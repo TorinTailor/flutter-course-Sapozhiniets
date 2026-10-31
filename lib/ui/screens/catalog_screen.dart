@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../bloc/games_bloc.dart';
+import '../../bloc/games_event.dart';
+import '../../bloc/games_state.dart';
 import '../../domain/entities/game.dart';
 import '../widgets/game_card.dart';
 
@@ -22,7 +26,6 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> {
   // final Set<String> _likedIds = {};
   final TextEditingController _titleController = TextEditingController();
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _itemsStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _favoritesStream;
 
   late int count;
@@ -37,8 +40,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
   @override
   void initState() {
     super.initState();
-
-    _itemsStream = FirebaseFirestore.instance.collection('games').snapshots();
 
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
@@ -140,13 +141,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
         SnackBar(content: Text('Не удалось изменить избранное: $e')),
       );
     }
-  }
-
-  Future<int?> gamesCount() async {
-    final collectionRef = FirebaseFirestore.instance.collection('games');
-    final snapshot = await collectionRef.count().get();
-
-    return snapshot.count;
   }
 
   @override
@@ -273,22 +267,30 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   Widget _buildCatalog() {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _itemsStream,
-      builder: (context, itemsSnapshot) {
-        if (itemsSnapshot.hasError) {
-          return Center(
-            child: Text('Ошибка загрузки каталога: ${itemsSnapshot.error}'),
-          );
-        }
-
-        if (itemsSnapshot.connectionState == ConnectionState.waiting) {
+    return BlocBuilder<GamesBloc, GamesState>(
+      builder: (context, state) {
+        if (state is GamesLoadInProgress) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final games = itemsSnapshot.data!.docs
-            .map((doc) => Game.fromFirestore(doc))
-            .toList();
+        if (state is GamesLoadFailure) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(state.message),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: () =>
+                      context.read<GamesBloc>().add(GamesLoadRequested()),
+                  child: const Text('Обновить'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final games = (state as GamesLoadSuccess).games;
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _favoritesStream,

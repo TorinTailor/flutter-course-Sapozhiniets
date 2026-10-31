@@ -1,8 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-
 import '../../domain/entities/game.dart';
-
+import 'category_chip.dart';
 import 'game_category_style.dart';
 
 class GameCard extends StatelessWidget {
@@ -86,43 +84,7 @@ class GameCard extends StatelessWidget {
                   runSpacing: 5,
                   children: [
                     for (final category in game.categories)
-                      Builder(
-                        builder: (context) {
-                          final c = category.style;
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: c.color,
-                              border: Border.all(
-                                color: c.borderColor,
-                                width: 2,
-                              ),
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(c.icon, size: 14, color: c.textColor),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    c.label,
-                                    style: TextStyle(
-                                      color: c.textColor,
-                                      fontSize: 13,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                      CategoryChip(category: category),
                   ],
                 ),
               ],

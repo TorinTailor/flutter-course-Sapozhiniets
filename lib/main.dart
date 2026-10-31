@@ -2,6 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_application_1/firebase_options.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'bloc/games_bloc.dart';
+import 'bloc/games_event.dart';
 import 'ui/screens/catalog_screen.dart';
 import 'ui/screens/login_screen.dart';
 
@@ -31,7 +34,10 @@ class _MainAppStaae extends State<MainApp> {
         if(snapshot.data == null){
           return LoginScreen();
         }
-        return CatalogScreen();
+        return BlocProvider(
+          create: (_) => GamesBloc()..add(GamesLoadRequested()),
+          child: const CatalogScreen(),
+        );
       })
     );
   }
