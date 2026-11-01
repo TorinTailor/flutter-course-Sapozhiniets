@@ -1,12 +1,20 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../bloc/games_bloc.dart';
+import '../../bloc/games_event.dart';
+import '../../bloc/games_state.dart';
 import '../../domain/entities/game.dart';
 import '../widgets/game_card.dart';
 
-const baseUrl = 'https://6ad492ee48476c0785d91f20.mockapi.io';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+//import 'package:firebase_core/firebase_core.dart'; TODO 1: Это задел на будущий экран профиля пока пусть будет тут
+//Text(FirebaseAuth.instance.currentUser?.email ?? '-')
+//Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfilScreen()));
+
+final db = FirebaseFirestore.instance;
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -16,22 +24,12 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  final Set<String> _likedIds = {};
+
   final TextEditingController _titleController = TextEditingController();
 
-  List<Game> _games = [];
-  bool _onlyFavorites = false;
-  bool _isLoading = true;
   bool _isSubmitting = false;
   bool _showForm = false;
-  String? _loadError;
   String? _titleError;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadGames();
-  }
 
   @override
   void dispose() {
@@ -39,37 +37,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
     super.dispose();
   }
 
-  Future<void> _loadGames() async {
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-    });
-
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/games'));
-      if (response.statusCode != 200) {
-        throw Exception('Статус ${response.statusCode}');
-      }
-
-      final items = jsonDecode(response.body) as List<dynamic>;
-      final games = items
-          .map((item) => Game.fromJson(item as Map<String, dynamic>))
-          .toList();
-
-      if (!mounted) return;
-      setState(() => _games = games);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _loadError = 'Не удалось загрузить каталог: $error');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   Future<void> _submitGame() async {
     final title = _titleController.text.trim();
+
     if (title.isEmpty) {
       setState(() => _titleError = 'Введите название игры');
       return;
@@ -90,29 +60,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
 
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/games'),
-        headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: jsonEncode(game.toJson()),
-      );
-      if (response.statusCode != 201) {
-        throw Exception('Статус ${response.statusCode}');
-      }
+      await FirebaseFirestore.instance.collection('games').add(game.toJson());
 
-      final created = Game.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
-      );
       if (!mounted) return;
+
       setState(() {
-        _games.insert(0, created);
         _titleController.clear();
         _showForm = false;
       });
-    } catch (error) {
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось добавить игру: $error')),
-      );
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Не удалось добавить игру: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -120,38 +81,40 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
-  void _toggleLike(String id) {
-    setState(() {
-      if (_likedIds.contains(id)) {
-        _likedIds.remove(id);
-      } else {
-        _likedIds.add(id);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final visibleGames = _onlyFavorites
-        ? _games.where((game) => _likedIds.contains(game.id)).toList()
-        : _games;
-
     return Scaffold(
       backgroundColor: const Color(0xFFFBF1DF),
       appBar: AppBar(
         toolbarHeight: 70,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Библиотека игр',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
-            ),
-            Text(
-              'В библиотеке игр: ${_games.length} · В избранном: ${_likedIds.length}',
-              style: const TextStyle(fontSize: 15),
-            ),
-          ],
+        title: BlocBuilder<GamesBloc, GamesState>(
+          builder: (context, state) {
+            final nickname = state is GamesLoadSuccess ? state.nickname : null;
+            final visibleCount = state is GamesLoadSuccess
+                ? state.visibleGames.length
+                : 0;
+            final favoritesCount = state is GamesLoadSuccess
+                ? state.likedIds.length
+                : 0;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nickname != null && nickname.isNotEmpty
+                      ? 'Библиотека игр ($nickname)'
+                      : 'Библиотека игр',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'В библиотеке: $visibleCount · В избранном: $favoritesCount',
+                  style: const TextStyle(fontSize: 15),
+                ),
+              ],
+            );
+          },
         ),
         actions: [
           IconButton(
@@ -172,35 +135,51 @@ class _CatalogScreenState extends State<CatalogScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
               child: Row(
                 children: [
-                  Flexible(child: FilterChip(
-                    showCheckmark: false,
-                    avatar: _onlyFavorites
-                        ? const Icon(Icons.favorite, color: Colors.red)
-                        : const Icon(Icons.favorite_border),
-                    shape: const StadiumBorder(),
-                    label: const Text('Только избранные'),
-                    labelStyle: TextStyle(
-                      color: _onlyFavorites ? Colors.green : Colors.black87,
+                  Flexible(
+                    child: BlocBuilder<GamesBloc, GamesState>(
+                      builder: (context, state) {
+                        final onlyFavorites =
+                            state is GamesLoadSuccess && state.onlyFavorites;
+
+                        return FilterChip(
+                          showCheckmark: false,
+                          avatar: onlyFavorites
+                              ? const Icon(Icons.favorite, color: Colors.red)
+                              : const Icon(Icons.favorite_border),
+                          shape: const StadiumBorder(),
+                          label: const Text('Только избранные'),
+                          labelStyle: TextStyle(
+                            color: onlyFavorites
+                                ? Colors.green
+                                : Colors.black87,
+                          ),
+                          selectedColor: const Color(0xFFB9CDBA),
+                          side: BorderSide(
+                            color: onlyFavorites
+                                ? const Color(0xFFB9CDBA)
+                                : Colors.grey,
+                          ),
+                          selected: onlyFavorites,
+                          onSelected: (_) => context.read<GamesBloc>().add(
+                            GamesFilterToggled(),
+                          ),
+                        );
+                      },
                     ),
-                    selectedColor: const Color(0xFFB9CDBA),
-                    side: BorderSide(
-                      color: _onlyFavorites
-                          ? const Color(0xFFB9CDBA)
-                          : Colors.grey,
-                    ),
-                    selected: _onlyFavorites,
-                    onSelected: (value) =>
-                        setState(() => _onlyFavorites = value),
-                  ),),
-                  IconButton(
-                      tooltip: 'Обновить каталог',
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _isLoading ? null : _loadGames,
+                  ),
+
+                  SizedBox(width: 5),
+
+                  ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                    },
+                    child: Text('Выйти'),
                   ),
                 ],
               ),
             ),
-            Expanded(child: _buildCatalog(visibleGames)),
+            Expanded(child: _buildCatalog()),
           ],
         ),
       ),
@@ -247,52 +226,65 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  Widget _buildCatalog(List<Game> visibleGames) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  Widget _buildCatalog() {
+    return BlocBuilder<GamesBloc, GamesState>(
+      builder: (context, state) {
+        if (state is GamesLoadInProgress) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    if (_loadError != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(_loadError!, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _loadGames,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Обновить'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (visibleGames.isEmpty) {
-      return const Center(child: Text('Ничего не нашлось'));
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadGames,
-      child: ListView.builder(
-        padding: const EdgeInsets.only(top: 5, left: 15, right: 15, bottom: 15),
-        itemCount: visibleGames.length,
-        itemBuilder: (context, index) {
-          final game = visibleGames[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: GameCard(
-              game: game,
-              isLiked: _likedIds.contains(game.id),
-              onLikeTap: () => _toggleLike(game.id),
+        if (state is GamesLoadFailure) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(state.message),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: () =>
+                      context.read<GamesBloc>().add(GamesLoadRequested()),
+                  child: const Text('Обновить'),
+                ),
+              ],
             ),
           );
-        },
-      ),
+        }
+
+        final s = state as GamesLoadSuccess;
+        final games = s.visibleGames;
+
+        if (games.isEmpty) {
+          return Center(
+            child: Text(
+              s.onlyFavorites ? 'В избранном пока пусто' : 'Ничего не нашлось',
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.only(
+            top: 5,
+            left: 15,
+            right: 15,
+            bottom: 15,
+          ),
+          itemCount: games.length,
+          itemBuilder: (context, index) {
+            final game = games[index];
+            final isLiked = s.likedIds.contains(game.id);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GameCard(
+                game: game,
+                isLiked: isLiked,
+                onLikeTap: () =>
+                    context.read<GamesBloc>().add(GameLikeToggled(game.id)),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
