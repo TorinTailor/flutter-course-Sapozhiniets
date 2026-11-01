@@ -340,14 +340,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                   'createdAt': FieldValue.serverTimestamp(),
                                 });
 
+                            if (!mounted) return;
                             setState(() {
                               error = null;
                             });
                           } on FirebaseAuthException catch (e) {
+                            if (!mounted) return;
                             setState(() {
                               error = e.code;
                             });
                           } catch (e) {
+                            if (!mounted) return;
                             setState(() {
                               error = e.toString();
                             });

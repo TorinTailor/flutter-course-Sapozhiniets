@@ -24,33 +24,12 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  // final Set<String> _likedIds = {};
-  final TextEditingController _titleController = TextEditingController();
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> _favoritesStream;
 
-  late int count;
+  final TextEditingController _titleController = TextEditingController();
+
   bool _isSubmitting = false;
-  bool _onlyFavorites = false;
   bool _showForm = false;
   String? _titleError;
-  String? _nickname;
-  int _visibleGamesCount = 0;
-  int _favoritesCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    _favoritesStream = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('favorites')
-        .snapshots();
-
-    _loadUserNickname(uid);
-  }
 
   @override
   void dispose() {
@@ -102,69 +81,40 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
-  Future<void> _loadUserNickname(String uid) async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
-
-      if (doc.exists && mounted) {
-        setState(() {
-          _nickname = doc.data()?['nickname'] as String?;
-        });
-      }
-    } catch (e) {
-      debugPrint('Ошибка при загрузке никнейма: $e');
-    }
-  }
-
-  Future<void> _toggleLike(String itemId, bool isLiked) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    final fav = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('favorites')
-        .doc(itemId);
-
-    try {
-      if (isLiked) {
-        await fav.delete();
-      } else {
-        await fav.set({'liked': true});
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось изменить избранное: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF1DF),
       appBar: AppBar(
         toolbarHeight: 70,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _nickname != null && _nickname!.isNotEmpty
-                  ? 'Библиотека игр ($_nickname)'
-                  : 'Библиотека игр',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              'В библиотеке: $_visibleGamesCount · В избранном: $_favoritesCount',
-              style: const TextStyle(fontSize: 15),
-            ),
-          ],
+        title: BlocBuilder<GamesBloc, GamesState>(
+          builder: (context, state) {
+            final nickname = state is GamesLoadSuccess ? state.nickname : null;
+            final visibleCount = state is GamesLoadSuccess
+                ? state.visibleGames.length
+                : 0;
+            final favoritesCount = state is GamesLoadSuccess
+                ? state.likedIds.length
+                : 0;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nickname != null && nickname.isNotEmpty
+                      ? 'Библиотека игр ($nickname)'
+                      : 'Библиотека игр',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'В библиотеке: $visibleCount · В избранном: $favoritesCount',
+                  style: const TextStyle(fontSize: 15),
+                ),
+              ],
+            );
+          },
         ),
         actions: [
           IconButton(
@@ -186,25 +136,35 @@ class _CatalogScreenState extends State<CatalogScreen> {
               child: Row(
                 children: [
                   Flexible(
-                    child: FilterChip(
-                      showCheckmark: false,
-                      avatar: _onlyFavorites
-                          ? const Icon(Icons.favorite, color: Colors.red)
-                          : const Icon(Icons.favorite_border),
-                      shape: const StadiumBorder(),
-                      label: const Text('Только избранные'),
-                      labelStyle: TextStyle(
-                        color: _onlyFavorites ? Colors.green : Colors.black87,
-                      ),
-                      selectedColor: const Color(0xFFB9CDBA),
-                      side: BorderSide(
-                        color: _onlyFavorites
-                            ? const Color(0xFFB9CDBA)
-                            : Colors.grey,
-                      ),
-                      selected: _onlyFavorites,
-                      onSelected: (value) =>
-                          setState(() => _onlyFavorites = value),
+                    child: BlocBuilder<GamesBloc, GamesState>(
+                      builder: (context, state) {
+                        final onlyFavorites =
+                            state is GamesLoadSuccess && state.onlyFavorites;
+
+                        return FilterChip(
+                          showCheckmark: false,
+                          avatar: onlyFavorites
+                              ? const Icon(Icons.favorite, color: Colors.red)
+                              : const Icon(Icons.favorite_border),
+                          shape: const StadiumBorder(),
+                          label: const Text('Только избранные'),
+                          labelStyle: TextStyle(
+                            color: onlyFavorites
+                                ? Colors.green
+                                : Colors.black87,
+                          ),
+                          selectedColor: const Color(0xFFB9CDBA),
+                          side: BorderSide(
+                            color: onlyFavorites
+                                ? const Color(0xFFB9CDBA)
+                                : Colors.grey,
+                          ),
+                          selected: onlyFavorites,
+                          onSelected: (_) => context.read<GamesBloc>().add(
+                            GamesFilterToggled(),
+                          ),
+                        );
+                      },
                     ),
                   ),
 
@@ -290,69 +250,37 @@ class _CatalogScreenState extends State<CatalogScreen> {
           );
         }
 
-        final games = (state as GamesLoadSuccess).games;
+        final s = state as GamesLoadSuccess;
+        final games = s.visibleGames;
 
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _favoritesStream,
-          builder: (context, favoritesSnapshot) {
-            if (favoritesSnapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Ошибка загрузки избранного: '
-                  '${favoritesSnapshot.error}',
-                ),
-              );
-            }
+        if (games.isEmpty) {
+          return Center(
+            child: Text(
+              s.onlyFavorites ? 'В избранном пока пусто' : 'Ничего не нашлось',
+            ),
+          );
+        }
 
-            if (favoritesSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        return ListView.builder(
+          padding: const EdgeInsets.only(
+            top: 5,
+            left: 15,
+            right: 15,
+            bottom: 15,
+          ),
+          itemCount: games.length,
+          itemBuilder: (context, index) {
+            final game = games[index];
+            final isLiked = s.likedIds.contains(game.id);
 
-            final likedIds = favoritesSnapshot.data!.docs
-                .map((doc) => doc.id)
-                .toSet();
-
-            final visibleGames = _onlyFavorites
-                ? games.where((game) => likedIds.contains(game.id)).toList()
-                : games;
-
-            if (_visibleGamesCount != visibleGames.length ||
-                _favoritesCount != likedIds.length) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _visibleGamesCount = visibleGames.length;
-                    _favoritesCount = likedIds.length;
-                  });
-                }
-              });
-            }
-
-            if (visibleGames.isEmpty) {
-              return const Center(child: Text('Ничего не нашлось'));
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.only(
-                top: 5,
-                left: 15,
-                right: 15,
-                bottom: 15,
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GameCard(
+                game: game,
+                isLiked: isLiked,
+                onLikeTap: () =>
+                    context.read<GamesBloc>().add(GameLikeToggled(game.id)),
               ),
-              itemCount: visibleGames.length,
-              itemBuilder: (context, index) {
-                final game = visibleGames[index];
-                final isLiked = likedIds.contains(game.id);
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: GameCard(
-                    game: game,
-                    isLiked: isLiked,
-                    onLikeTap: () => _toggleLike(game.id, isLiked),
-                  ),
-                );
-              },
             );
           },
         );

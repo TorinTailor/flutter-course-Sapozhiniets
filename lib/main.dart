@@ -3,8 +3,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_application_1/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'bloc/games_bloc.dart';
 import 'bloc/games_event.dart';
+import 'data/games_repository.dart';
 import 'ui/screens/catalog_screen.dart';
 import 'ui/screens/login_screen.dart';
 
@@ -22,23 +24,26 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppStaae extends State<MainApp> {
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: StreamBuilder(stream: FirebaseAuth.instance.authStateChanges(), builder: (context, snapshot) {
-        if(snapshot.connectionState == ConnectionState.waiting){
-          return CircularProgressIndicator();
-        }
-        if(snapshot.data == null){
-          return LoginScreen();
-        }
-        return BlocProvider(
-          create: (_) => GamesBloc()..add(GamesLoadRequested()),
-          child: const CatalogScreen(),
-        );
-      })
+      home: StreamBuilder(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return CircularProgressIndicator();
+          }
+          if (snapshot.data == null) {
+            return LoginScreen();
+          }
+          return BlocProvider(
+            create: (_) =>
+                GamesBloc(GamesRepository())..add(GamesLoadRequested()),
+            child: const CatalogScreen(),
+          );
+        },
+      ),
     );
   }
 }
