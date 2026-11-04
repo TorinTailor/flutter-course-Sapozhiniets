@@ -19,6 +19,12 @@ class GamesRepository {
     }
   }
 
+  Future<void> addGame(Game game) => _db.collection('games').add({
+    ...game.toJson(),
+    'userId': _auth.currentUser!.uid,
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+
   CollectionReference<Map<String, dynamic>> get _favorites => _db
       .collection('users')
       .doc(_auth.currentUser!.uid)

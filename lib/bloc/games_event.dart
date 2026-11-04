@@ -1,3 +1,5 @@
+import '../domain/entities/game.dart';
+
 sealed class GamesEvent {}
 
 class GamesLoadRequested extends GamesEvent {}
@@ -8,3 +10,8 @@ class GameLikeToggled extends GamesEvent {
 }
 
 class GamesFilterToggled extends GamesEvent {}
+
+class GameAdded extends GamesEvent {
+  final Game game;
+  GameAdded(this.game);
+}

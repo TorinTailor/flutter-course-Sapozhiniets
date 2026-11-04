@@ -4,6 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 const noInternetMessage = 'Нет соединения с интернетом';
 
+const noInternetActionMessage =
+    'Нет подключения к интернету. Проверьте соединение и повторите попытку';
+
 String errorMessage(Object error) {
   if (error is FirebaseAuthException) return _authMessage(error.code);
   if (error is FirebaseException) return _firebaseMessage(error.code);
@@ -13,7 +16,6 @@ String errorMessage(Object error) {
   return 'Что-то пошло не так. Попробуйте ещё раз';
 }
 
-// Firebase Authentication: вход и регистрация.
 String _authMessage(String code) => switch (code) {
   'invalid-email' => 'Некорректный адрес почты',
   'user-not-found' => 'Аккаунт с такой почтой не найден',

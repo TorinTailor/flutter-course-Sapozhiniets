@@ -4,17 +4,24 @@ sealed class GamesState {}
 
 class GamesLoadInProgress extends GamesState {}
 
+class UserNotice {
+  final String message;
+  UserNotice(this.message);
+}
+
 class GamesLoadSuccess extends GamesState {
   final List<Game> games;
   final Set<String> likedIds;
   final bool onlyFavorites;
   final String? nickname;
+  final UserNotice? notice;
 
   GamesLoadSuccess({
     required this.games,
     this.likedIds = const {},
     this.onlyFavorites = false,
     this.nickname,
+    this.notice,
   });
 
   GamesLoadSuccess copyWith({
@@ -22,12 +29,14 @@ class GamesLoadSuccess extends GamesState {
     Set<String>? likedIds,
     bool? onlyFavorites,
     String? nickname,
+    UserNotice? notice,
   }) {
     return GamesLoadSuccess(
       games: games ?? this.games,
       likedIds: likedIds ?? this.likedIds,
       onlyFavorites: onlyFavorites ?? this.onlyFavorites,
       nickname: nickname ?? this.nickname,
+      notice: notice ?? this.notice,
     );
   }
 

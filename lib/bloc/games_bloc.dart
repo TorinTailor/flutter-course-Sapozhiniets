@@ -12,6 +12,7 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     on<GamesLoadRequested>(_onLoadRequested);
     on<GameLikeToggled>(_onLikeToggled);
     on<GamesFilterToggled>(_onFilterToggled);
+    on<GameAdded>(_onGameAdded);
   }
 
   Future<void> _onLoadRequested(
@@ -72,7 +73,7 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
 
     try {
       await _repository.toggleLike(event.gameId, wasLiked);
-    } catch (_) {
+    } catch (e) {
       final current = state;
       if (current is GamesLoadSuccess) {
         final rollback = {...current.likedIds};
@@ -81,7 +82,14 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
         } else {
           rollback.remove(event.gameId);
         }
-        emit(current.copyWith(likedIds: rollback));
+        emit(
+          current.copyWith(
+            likedIds: rollback,
+            notice: UserNotice(
+              'Не удалось изменить избранное. ${errorMessage(e)}',
+            ),
+          ),
+        );
       }
     }
   }
@@ -93,6 +101,24 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     final s = state;
     if (s is GamesLoadSuccess) {
       emit(s.copyWith(onlyFavorites: !s.onlyFavorites));
+    }
+  }
+
+  Future<void> _onGameAdded(
+    GameAdded event,
+    Emitter<GamesState> emit,
+  ) async {
+    try {
+      await _repository.addGame(event.game);
+    } catch (e) {
+      final s = state;
+      if (s is GamesLoadSuccess) {
+        emit(
+          s.copyWith(
+            notice: UserNotice('Не удалось добавить игру. ${errorMessage(e)}'),
+          ),
+        );
+      }
     }
   }
 }

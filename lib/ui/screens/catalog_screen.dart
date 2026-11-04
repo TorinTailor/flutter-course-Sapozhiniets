@@ -11,15 +11,13 @@ import '../../utils/connectivity.dart';
 import '../../utils/error_messages.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/game_card.dart';
+import 'add_game_screen.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 //import 'package:firebase_core/firebase_core.dart'; TODO 1: Это задел на будущий экран профиля пока пусть будет тут
 //Text(FirebaseAuth.instance.currentUser?.email ?? '-')
 //Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfilScreen()));
-
-final db = FirebaseFirestore.instance;
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -29,17 +27,11 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  final TextEditingController _titleController = TextEditingController();
-
-  bool _isSubmitting = false;
-  bool _showForm = false;
-  String? _titleError;
   bool _showOfflineBanner = false;
   Timer? _bannerTimer;
 
   @override
   void dispose() {
-    _titleController.dispose();
     _bannerTimer?.cancel();
     super.dispose();
   }
@@ -63,201 +55,140 @@ class _CatalogScreenState extends State<CatalogScreen> {
     bloc.add(GameLikeToggled(gameId));
   }
 
-  Future<void> _submitGame() async {
-    final title = _titleController.text.trim();
-
-    if (title.isEmpty) {
-      setState(() => _titleError = 'Введите название игры');
-      return;
-    }
-
-    if (!await hasInternet()) {
-      _showNoInternet();
-      return;
-    }
-    if (!mounted) return;
-
-    setState(() {
-      _titleError = null;
-      _isSubmitting = true;
-    });
-
-    final game = Game(
-      id: '',
-      title: title,
-      subtitle: 'Добавлено пользователем. В состоянии модерации.',
-      categories: {GameCategory.empty},
-      imageAsset: 'assets/empty.png',
-      accentColor: '000000',
+  Future<void> _openAddGame() async {
+    final game = await Navigator.push<Game>(
+      context,
+      MaterialPageRoute(builder: (_) => const AddGameScreen()),
     );
-
-    try {
-      await FirebaseFirestore.instance.collection('games').add(game.toJson());
-
-      if (!mounted) return;
-
-      setState(() {
-        _titleController.clear();
-        _showForm = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Не удалось добавить игру. ${errorMessage(e)}')));
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
-    }
+    if (game == null || !mounted) return;
+    context.read<GamesBloc>().add(GameAdded(game));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFBF1DF),
-      appBar: AppBar(
-        toolbarHeight: 70,
-        title: BlocBuilder<GamesBloc, GamesState>(
-          builder: (context, state) {
-            final nickname = state is GamesLoadSuccess ? state.nickname : null;
-            final visibleCount = state is GamesLoadSuccess
-                ? state.visibleGames.length
-                : 0;
-            final favoritesCount = state is GamesLoadSuccess
-                ? state.likedIds.length
-                : 0;
+    return BlocListener<GamesBloc, GamesState>(
+      listenWhen: (previous, current) =>
+          current is GamesLoadSuccess &&
+          current.notice != null &&
+          (previous is! GamesLoadSuccess || previous.notice != current.notice),
+      listener: (context, state) {
+        final notice = (state as GamesLoadSuccess).notice;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(notice!.message)));
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFBF1DF),
+        appBar: AppBar(
+          toolbarHeight: 70,
+          title: BlocBuilder<GamesBloc, GamesState>(
+            builder: (context, state) {
+              final nickname = state is GamesLoadSuccess
+                  ? state.nickname
+                  : null;
+              final visibleCount = state is GamesLoadSuccess
+                  ? state.visibleGames.length
+                  : 0;
+              final favoritesCount = state is GamesLoadSuccess
+                  ? state.likedIds.length
+                  : 0;
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  nickname != null && nickname.isNotEmpty
-                      ? 'Библиотека игр ($nickname)'
-                      : 'Библиотека игр',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  'В библиотеке: $visibleCount · В избранном: $favoritesCount',
-                  style: const TextStyle(fontSize: 15),
-                ),
-              ],
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    nickname != null && nickname.isNotEmpty
+                        ? 'Библиотека игр ($nickname)'
+                        : 'Библиотека игр',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'В библиотеке: $visibleCount · В избранном: $favoritesCount',
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        floatingActionButton: BlocBuilder<GamesBloc, GamesState>(
+          builder: (context, state) {
+            if (state is! GamesLoadSuccess) return const SizedBox.shrink();
+
+            return FloatingActionButton(
+              onPressed: _openAddGame,
+              tooltip: 'Добавить игру',
+              backgroundColor: const Color(0xFFFFB1B1),
+              foregroundColor: const Color(0xFF5A0000),
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add),
             );
           },
         ),
-        actions: [
-          IconButton(
-            padding: EdgeInsets.only(right: 20),
-            tooltip: _showForm ? 'Скрыть форму' : 'Добавить игру',
-            icon: Icon(_showForm ? Icons.close : Icons.add),
-            onPressed: _isSubmitting
-                ? null
-                : () => setState(() => _showForm = !_showForm),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (_showOfflineBanner)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(15, 12, 15, 0),
-                child: ErrorBanner(
-                  'Нет подключения к интернету. Проверьте соединение и повторите попытку',
-                ),
-              ),
-            if (_showForm) _buildForm(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-              child: Row(
-                children: [
-                  Flexible(
-                    child: BlocBuilder<GamesBloc, GamesState>(
-                      builder: (context, state) {
-                        final onlyFavorites =
-                            state is GamesLoadSuccess && state.onlyFavorites;
-
-                        return FilterChip(
-                          showCheckmark: false,
-                          avatar: onlyFavorites
-                              ? const Icon(Icons.favorite, color: Colors.red)
-                              : const Icon(Icons.favorite_border),
-                          shape: const StadiumBorder(),
-                          label: const Text('Только избранные'),
-                          labelStyle: TextStyle(
-                            color: onlyFavorites
-                                ? Colors.green
-                                : Colors.black87,
-                          ),
-                          selectedColor: const Color(0xFFB9CDBA),
-                          side: BorderSide(
-                            color: onlyFavorites
-                                ? const Color(0xFFB9CDBA)
-                                : Colors.grey,
-                          ),
-                          selected: onlyFavorites,
-                          onSelected: (_) => context.read<GamesBloc>().add(
-                            GamesFilterToggled(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  SizedBox(width: 5),
-
-                  ElevatedButton(
-                    onPressed: () async {
-                      await FirebaseAuth.instance.signOut();
-                    },
-                    child: Text('Выйти'),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(child: _buildCatalog()),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildForm() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(15, 12, 15, 0),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+        body: SafeArea(
+          child: Column(
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _titleController,
-                  enabled: !_isSubmitting,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _isSubmitting ? null : _submitGame(),
-                  decoration: InputDecoration(
-                    labelText: 'Название',
-                    errorText: _titleError,
-                    border: const OutlineInputBorder(),
-                  ),
+              if (_showOfflineBanner)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(15, 12, 15, 0),
+                  child: ErrorBanner(noInternetActionMessage),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Flexible(
+                      // Нажатие — read + add. Перерисовка — BlocBuilder.
+                      child: BlocBuilder<GamesBloc, GamesState>(
+                        builder: (context, state) {
+                          final onlyFavorites =
+                              state is GamesLoadSuccess && state.onlyFavorites;
+
+                          return FilterChip(
+                            showCheckmark: false,
+                            avatar: onlyFavorites
+                                ? const Icon(Icons.favorite, color: Colors.red)
+                                : const Icon(Icons.favorite_border),
+                            shape: const StadiumBorder(),
+                            label: const Text('Только избранные'),
+                            labelStyle: TextStyle(
+                              color: onlyFavorites
+                                  ? Colors.green
+                                  : Colors.black87,
+                            ),
+                            selectedColor: const Color(0xFFB9CDBA),
+                            side: BorderSide(
+                              color: onlyFavorites
+                                  ? const Color(0xFFB9CDBA)
+                                  : Colors.grey,
+                            ),
+                            selected: onlyFavorites,
+                            onSelected: (_) => context.read<GamesBloc>().add(
+                              GamesFilterToggled(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    SizedBox(width: 5),
+
+                    ElevatedButton(
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                      },
+                      child: Text('Выйти'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitGame,
-                child: _isSubmitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Отправить'),
-              ),
+              Expanded(child: _buildCatalog()),
             ],
           ),
         ),
@@ -289,8 +220,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
           );
         }
 
+        // Загрузку и ошибку обработали выше, остаётся успех.
         final s = state as GamesLoadSuccess;
-        final games = s.visibleGames;
+        final games = s.visibleGames; // уже отфильтрованный список
 
         if (games.isEmpty) {
           return Center(
@@ -301,11 +233,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
         }
 
         return ListView.builder(
+          // Снизу запас, чтобы кнопка «+» не закрывала последнюю карточку.
           padding: const EdgeInsets.only(
             top: 5,
             left: 15,
             right: 15,
-            bottom: 15,
+            bottom: 88,
           ),
           itemCount: games.length,
           itemBuilder: (context, index) {
