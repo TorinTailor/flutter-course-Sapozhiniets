@@ -2,15 +2,22 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../domain/entities/game.dart';
+import '../utils/connectivity.dart';
 
 class GamesRepository {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  Stream<List<Game>> watchGames() => _db
-      .collection('games')
-      .snapshots()
-      .map((snapshot) => snapshot.docs.map(Game.fromFirestore).toList());
+  Future<bool> isOnline() => hasInternet();
+
+  Stream<List<Game>> watchGames() async* {
+    await for (final snapshot in _db.collection('games').snapshots()) {
+      if (snapshot.metadata.isFromCache && snapshot.docs.isEmpty) {
+        throw FirebaseException(plugin: 'cloud_firestore', code: 'unavailable');
+      }
+      yield snapshot.docs.map(Game.fromFirestore).toList();
+    }
+  }
 
   CollectionReference<Map<String, dynamic>> get _favorites => _db
       .collection('users')

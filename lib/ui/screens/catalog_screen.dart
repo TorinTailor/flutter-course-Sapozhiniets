@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -5,6 +7,9 @@ import '../../bloc/games_bloc.dart';
 import '../../bloc/games_event.dart';
 import '../../bloc/games_state.dart';
 import '../../domain/entities/game.dart';
+import '../../utils/connectivity.dart';
+import '../../utils/error_messages.dart';
+import '../widgets/error_banner.dart';
 import '../widgets/game_card.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -24,17 +29,38 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-
   final TextEditingController _titleController = TextEditingController();
 
   bool _isSubmitting = false;
   bool _showForm = false;
   String? _titleError;
+  bool _showOfflineBanner = false;
+  Timer? _bannerTimer;
 
   @override
   void dispose() {
     _titleController.dispose();
+    _bannerTimer?.cancel();
     super.dispose();
+  }
+
+  void _showNoInternet() {
+    if (!mounted) return;
+    _bannerTimer?.cancel();
+    setState(() => _showOfflineBanner = true);
+    _bannerTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showOfflineBanner = false);
+    });
+  }
+
+  Future<void> _onLikeTap(String gameId) async {
+    final bloc = context.read<GamesBloc>();
+    if (!await hasInternet()) {
+      _showNoInternet();
+      return;
+    }
+    if (!mounted) return;
+    bloc.add(GameLikeToggled(gameId));
   }
 
   Future<void> _submitGame() async {
@@ -44,6 +70,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
       setState(() => _titleError = 'Введите название игры');
       return;
     }
+
+    if (!await hasInternet()) {
+      _showNoInternet();
+      return;
+    }
+    if (!mounted) return;
 
     setState(() {
       _titleError = null;
@@ -73,7 +105,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Не удалось добавить игру: $e')));
+      ).showSnackBar(SnackBar(content: Text('Не удалось добавить игру. ${errorMessage(e)}')));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -130,6 +162,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (_showOfflineBanner)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(15, 12, 15, 0),
+                child: ErrorBanner(
+                  'Нет подключения к интернету. Проверьте соединение и повторите попытку',
+                ),
+              ),
             if (_showForm) _buildForm(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
@@ -238,7 +277,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(state.message),
+                Text(state.message, textAlign: TextAlign.center),
                 const SizedBox(height: 10),
                 ElevatedButton(
                   onPressed: () =>
@@ -278,8 +317,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               child: GameCard(
                 game: game,
                 isLiked: isLiked,
-                onLikeTap: () =>
-                    context.read<GamesBloc>().add(GameLikeToggled(game.id)),
+                onLikeTap: () => _onLikeTap(game.id),
               ),
             );
           },

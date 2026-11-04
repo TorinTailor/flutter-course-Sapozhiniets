@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../data/games_repository.dart';
+import '../utils/error_messages.dart';
 import 'games_event.dart';
 import 'games_state.dart';
 
@@ -19,11 +20,16 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
   ) async {
     emit(GamesLoadInProgress());
 
+    if (!await _repository.isOnline()) {
+      emit(GamesLoadFailure('Не удалось загрузить каталог.\n$noInternetMessage'));
+      return;
+    }
+
     final Set<String> likedIds;
     try {
       likedIds = await _repository.fetchLikedIds();
-    } catch (_) {
-      emit(GamesLoadFailure('Не удалось загрузить каталог'));
+    } catch (e) {
+      emit(GamesLoadFailure('Не удалось загрузить каталог.\n${errorMessage(e)}'));
       return;
     }
     final nickname = await _repository.fetchNickname();
@@ -40,8 +46,9 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
                 nickname: nickname,
               );
       },
-      onError: (error, stackTrace) =>
-          GamesLoadFailure('Не удалось загрузить каталог'),
+      onError: (error, stackTrace) => GamesLoadFailure(
+        'Не удалось загрузить каталог.\n${errorMessage(error)}',
+      ),
     );
   }
 
@@ -66,7 +73,6 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     try {
       await _repository.toggleLike(event.gameId, wasLiked);
     } catch (_) {
-
       final current = state;
       if (current is GamesLoadSuccess) {
         final rollback = {...current.likedIds};
@@ -80,7 +86,10 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     }
   }
 
-  void _onFilterToggled(GamesFilterToggled event, Emitter<GamesState> emit) {
+  void _onFilterToggled(
+    GamesFilterToggled event,
+    Emitter<GamesState> emit,
+  ) {
     final s = state;
     if (s is GamesLoadSuccess) {
       emit(s.copyWith(onlyFavorites: !s.onlyFavorites));

@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/error_messages.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -113,11 +115,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         size: 20,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        error!,
-                        style: const TextStyle(
-                          color: Color(0xFFD32F2F),
-                          fontSize: 14,
+                      Expanded(
+                        child: Text(
+                          error!,
+                          style: const TextStyle(
+                            color: Color(0xFFD32F2F),
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
@@ -187,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextField(
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    hintText: 'you@exampie.com',
+                    hintText: 'you@exampile.com',
                     errorText: emailError,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -207,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value.isEmpty) {
                         emailError = 'Это обязательное поле';
                       } else if (value.isNotEmpty && !value.contains('@')) {
-                        emailError = 'Введите коректный Email';
+                        emailError = 'Введите корректный Email';
                       } else {
                         emailError = null;
                       }
@@ -291,9 +295,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         email: loginController.text,
                         password: passwordController.text,
                       );
-                    } on FirebaseAuthException catch (e) {
+                    } catch (e) {
+                      if (!mounted) return;
                       setState(() {
-                        error = e.code;
+                        error = errorMessage(e);
                       });
                     }
                   },
@@ -344,21 +349,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             setState(() {
                               error = null;
                             });
-                          } on FirebaseAuthException catch (e) {
-                            if (!mounted) return;
-                            setState(() {
-                              error = e.code;
-                            });
                           } catch (e) {
                             if (!mounted) return;
                             setState(() {
-                              error = e.toString();
+                              error = errorMessage(e);
                             });
                           }
                         }
                       : null,
                   child: Text(
-                    'Зарегистрироваться',
+                    'Зарегестрироваться',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -386,7 +386,14 @@ class _LoginScreenState extends State<LoginScreen> {
             Align(
               child: TextButton(
                 onPressed: () async {
-                  await FirebaseAuth.instance.signInAnonymously();
+                  try {
+                    await FirebaseAuth.instance.signInAnonymously();
+                  } catch (e) {
+                    if (!mounted) return;
+                    setState(() {
+                      error = errorMessage(e);
+                    });
+                  }
                 },
                 child: Text('Анонимный пользователь'),
               ),
