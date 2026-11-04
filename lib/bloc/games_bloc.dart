@@ -38,7 +38,7 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
                 games: games,
                 likedIds: likedIds,
                 nickname: nickname,
-              ); // первая загрузка
+              );
       },
       onError: (error, stackTrace) =>
           GamesLoadFailure('Не удалось загрузить каталог'),
@@ -54,7 +54,7 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
 
     final wasLiked = s.likedIds.contains(event.gameId);
 
-    final ids = {...s.likedIds}; // новый набор, старый не трогаем
+    final ids = {...s.likedIds};
     if (wasLiked) {
       ids.remove(event.gameId);
     } else {
