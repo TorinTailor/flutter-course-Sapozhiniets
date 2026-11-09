@@ -43,6 +43,8 @@ class GamesLoadSuccess extends GamesState {
   List<Game> get visibleGames => onlyFavorites
       ? games.where((game) => likedIds.contains(game.id)).toList()
       : games;
+
+  int get favoritesCount => games.where((g) => likedIds.contains(g.id)).length;
 }
 
 class GamesLoadFailure extends GamesState {

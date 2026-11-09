@@ -54,4 +54,14 @@ class GamesRepository {
       await _favorites.doc(gameId).set({'liked': true});
     }
   }
+
+  Future<void> updateGame(Game game) =>
+      _db.collection('games').doc(game.id).update(game.toJson());
+
+  Future<void> deleteGame(String gameId) async {
+    await _db.collection('games').doc(gameId).delete();
+    await _favorites
+        .doc(gameId)
+        .delete();
+  }
 }

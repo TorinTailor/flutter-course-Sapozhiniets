@@ -13,6 +13,8 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     on<GameLikeToggled>(_onLikeToggled);
     on<GamesFilterToggled>(_onFilterToggled);
     on<GameAdded>(_onGameAdded);
+    on<GameUpdated>(_onGameUpdated);
+    on<GameDeleted>(_onGameDeleted);
   }
 
   Future<void> _onLoadRequested(
@@ -22,7 +24,9 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     emit(GamesLoadInProgress());
 
     if (!await _repository.isOnline()) {
-      emit(GamesLoadFailure('Не удалось загрузить каталог.\n$noInternetMessage'));
+      emit(
+        GamesLoadFailure('Не удалось загрузить каталог.\n$noInternetMessage'),
+      );
       return;
     }
 
@@ -30,7 +34,9 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     try {
       likedIds = await _repository.fetchLikedIds();
     } catch (e) {
-      emit(GamesLoadFailure('Не удалось загрузить каталог.\n${errorMessage(e)}'));
+      emit(
+        GamesLoadFailure('Не удалось загрузить каталог.\n${errorMessage(e)}'),
+      );
       return;
     }
     final nickname = await _repository.fetchNickname();
@@ -94,20 +100,14 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
     }
   }
 
-  void _onFilterToggled(
-    GamesFilterToggled event,
-    Emitter<GamesState> emit,
-  ) {
+  void _onFilterToggled(GamesFilterToggled event, Emitter<GamesState> emit) {
     final s = state;
     if (s is GamesLoadSuccess) {
       emit(s.copyWith(onlyFavorites: !s.onlyFavorites));
     }
   }
 
-  Future<void> _onGameAdded(
-    GameAdded event,
-    Emitter<GamesState> emit,
-  ) async {
+  Future<void> _onGameAdded(GameAdded event, Emitter<GamesState> emit) async {
     try {
       await _repository.addGame(event.game);
     } catch (e) {
@@ -116,6 +116,48 @@ class GamesBloc extends Bloc<GamesEvent, GamesState> {
         emit(
           s.copyWith(
             notice: UserNotice('Не удалось добавить игру. ${errorMessage(e)}'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _onGameUpdated(
+    GameUpdated event,
+    Emitter<GamesState> emit,
+  ) async {
+    try {
+      await _repository.updateGame(event.game);
+    } catch (e) {
+      final s = state;
+      if (s is GamesLoadSuccess) {
+        emit(
+          s.copyWith(
+            notice: UserNotice(
+              'Не удалось сохранить изменения. ${errorMessage(e)}',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _onGameDeleted(
+    GameDeleted event,
+    Emitter<GamesState> emit,
+  ) async {
+    try {
+      await _repository.deleteGame(event.gameId);
+      final s = state;
+      if (s is GamesLoadSuccess && s.likedIds.contains(event.gameId)) {
+        emit(s.copyWith(likedIds: {...s.likedIds}..remove(event.gameId)));
+      }
+    } catch (e) {
+      final s = state;
+      if (s is GamesLoadSuccess) {
+        emit(
+          s.copyWith(
+            notice: UserNotice('Не удалось удалить игру. ${errorMessage(e)}'),
           ),
         );
       }

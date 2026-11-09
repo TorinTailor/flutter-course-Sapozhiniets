@@ -18,6 +18,7 @@ class Game {
   final String id;
   final String title;
   final String subtitle;
+  final String description;
   final Set<GameCategory> categories;
   final String imageAsset;
   final String accentColor;
@@ -26,6 +27,7 @@ class Game {
     required this.id,
     required this.title,
     required this.subtitle,
+    this.description = '',
     required this.categories,
     required this.imageAsset,
     required this.accentColor,
@@ -36,6 +38,7 @@ class Game {
       id: json['id'] as String,
       title: json['title'] as String,
       subtitle: json['subtitle'] as String,
+      description: json['description'] as String? ?? '',
       categories: (json['category'] as List<dynamic>)
           .map((value) => GameCategory.values.byName(value as String))
           .toSet(),
@@ -53,6 +56,7 @@ factory Game.fromFirestore(
     id: doc.id,
     title: data['title'] as String? ?? '',
     subtitle: data['subtitle'] as String? ?? '',
+    description: data['description'] as String? ?? '',
     categories: (data['category'] as List<dynamic>? ?? [])
         .map(
           (value) => GameCategory.values.byName(
@@ -69,6 +73,7 @@ factory Game.fromFirestore(
     return {
       'title': title,
       'subtitle': subtitle,
+      'description': description,
       'category': categories.map((category) => category.name).toList(),
       'image': imageAsset,
       'accentColor': accentColor,

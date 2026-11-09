@@ -19,7 +19,8 @@ const _accentColors = [
 const _defaultSubtitle = 'Добавлено пользователем. В состоянии модерации.';
 
 class AddGameScreen extends StatefulWidget {
-  const AddGameScreen({super.key});
+  final Game? game;
+  const AddGameScreen({super.key, this.game});
 
   @override
   State<AddGameScreen> createState() => _AddGameScreenState();
@@ -33,10 +34,26 @@ class _AddGameScreenState extends State<AddGameScreen> {
   String? _titleError;
   bool _noInternet = false;
 
+  final _descriptionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final game = widget.game;
+    if (game == null) return;
+
+    _titleController.text = game.title;
+    _subtitleController.text = game.subtitle;
+    _descriptionController.text = game.description;
+    _categories.addAll(game.categories.where((c) => c != GameCategory.empty));
+    _accentColor = game.accentColor;
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
     _subtitleController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -66,11 +83,12 @@ class _AddGameScreenState extends State<AddGameScreen> {
     Navigator.pop(
       context,
       Game(
-        id: '',
+        id: widget.game?.id ?? '',
         title: title,
         subtitle: subtitle.isEmpty ? _defaultSubtitle : subtitle,
+        description: _descriptionController.text.trim(),
         categories: _categories.isEmpty ? {GameCategory.empty} : _categories,
-        imageAsset: 'assets/empty.png',
+        imageAsset: widget.game?.imageAsset ?? 'assets/empty.png',
         accentColor: _accentColor,
       ),
     );
@@ -95,7 +113,9 @@ class _AddGameScreenState extends State<AddGameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF1DF),
-      appBar: AppBar(title: const Text('Новая игра')),
+      appBar: AppBar(
+        title: Text(widget.game == null ? 'Новая игра' : 'Редактирование'),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -119,6 +139,14 @@ class _AddGameScreenState extends State<AddGameScreen> {
               textCapitalization: TextCapitalization.sentences,
               textInputAction: TextInputAction.done,
               decoration: _decoration('Издатель - год выпуска'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descriptionController,
+              textCapitalization: TextCapitalization.sentences,
+              minLines: 3,
+              maxLines: 6,
+              decoration: _decoration('Описание'),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -158,8 +186,8 @@ class _AddGameScreenState extends State<AddGameScreen> {
                 ),
               ),
               onPressed: _submit,
-              child: const Text(
-                'Добавить игру',
+              child: Text(
+                widget.game == null ? 'Добавить игру' : 'Сохранить',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

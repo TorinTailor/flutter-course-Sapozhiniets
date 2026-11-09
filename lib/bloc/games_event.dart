@@ -15,3 +15,13 @@ class GameAdded extends GamesEvent {
   final Game game;
   GameAdded(this.game);
 }
+
+class GameUpdated extends GamesEvent {
+  final Game game;
+  GameUpdated(this.game);
+}
+
+class GameDeleted extends GamesEvent {
+  final String gameId;
+  GameDeleted(this.gameId);
+}

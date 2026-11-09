@@ -12,12 +12,9 @@ import '../../utils/error_messages.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/game_card.dart';
 import 'add_game_screen.dart';
+import 'game_details_screen.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
-
-//import 'package:firebase_core/firebase_core.dart'; TODO 1: Это задел на будущий экран профиля пока пусть будет тут
-//Text(FirebaseAuth.instance.currentUser?.email ?? '-')
-//Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfilScreen()));
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -43,6 +40,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
     _bannerTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _showOfflineBanner = false);
     });
+  }
+
+  void _openDetails(Game game) {
+    final bloc = context.read<GamesBloc>();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: bloc,
+          child: GameDetailsScreen(game: game),
+        ),
+      ),
+    );
   }
 
   Future<void> _onLikeTap(String gameId) async {
@@ -73,9 +83,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
           (previous is! GamesLoadSuccess || previous.notice != current.notice),
       listener: (context, state) {
         final notice = (state as GamesLoadSuccess).notice;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(notice!.message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(notice!.message)));
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFFBF1DF),
@@ -90,7 +99,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ? state.visibleGames.length
                   : 0;
               final favoritesCount = state is GamesLoadSuccess
-                  ? state.likedIds.length
+                  ? state.favoritesCount
                   : 0;
 
               return Column(
@@ -144,7 +153,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 child: Row(
                   children: [
                     Flexible(
-                      // Нажатие — read + add. Перерисовка — BlocBuilder.
                       child: BlocBuilder<GamesBloc, GamesState>(
                         builder: (context, state) {
                           final onlyFavorites =
@@ -220,9 +228,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
           );
         }
 
-        // Загрузку и ошибку обработали выше, остаётся успех.
         final s = state as GamesLoadSuccess;
-        final games = s.visibleGames; // уже отфильтрованный список
+        final games = s.visibleGames;
 
         if (games.isEmpty) {
           return Center(
@@ -233,7 +240,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
         }
 
         return ListView.builder(
-          // Снизу запас, чтобы кнопка «+» не закрывала последнюю карточку.
           padding: const EdgeInsets.only(
             top: 5,
             left: 15,
@@ -251,6 +257,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 game: game,
                 isLiked: isLiked,
                 onLikeTap: () => _onLikeTap(game.id),
+                onTap: () => _openDetails(game), // ← новая строка
               ),
             );
           },
