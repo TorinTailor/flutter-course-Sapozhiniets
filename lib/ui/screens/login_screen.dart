@@ -1,7 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/material.dart';
 
+import '../../data/auth_repository.dart';
 import '../../utils/error_messages.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -40,6 +40,33 @@ class _LoginScreenState extends State<LoginScreen> {
     passwordController.dispose();
     super.dispose();
   }
+
+  Future<void> _signIn() async {
+  final auth = context.read<AuthRepository>();
+  try {
+    await auth.signIn(
+      email: loginController.text,
+      password: passwordController.text,
+    );
+  } catch (e) {
+    if (!mounted) return;
+    setState(() => error = errorMessage(e));
+  }
+}
+
+Future<void> _register() async {
+  final auth = context.read<AuthRepository>();
+  try {
+    await auth.register(
+      nickname: nameController.text,
+      email: loginController.text,
+      password: passwordController.text,
+    );
+  } catch (e) {
+    if (!mounted) return;
+    setState(() => error = errorMessage(e));
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextField(
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    hintText: 'you@exampile.com',
+                    hintText: 'you@example.com',
                     errorText: emailError,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -289,19 +316,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  onPressed: () async {
-                    try {
-                      await FirebaseAuth.instance.signInWithEmailAndPassword(
-                        email: loginController.text,
-                        password: passwordController.text,
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      setState(() {
-                        error = errorMessage(e);
-                      });
-                    }
-                  },
+                  onPressed: _signIn,
 
                   child: Text(
                     'Войти',
@@ -321,44 +336,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadiusGeometry.circular(10),
                     ),
                   ),
-
-                  onPressed: _isRegisterButtonEnabled
-                      ? () async {
-                          try {
-                            final credential = await FirebaseAuth.instance
-                                .createUserWithEmailAndPassword(
-                                  email: loginController.text.trim(),
-                                  password: passwordController.text.trim(),
-                                );
-
-                            await credential.user?.updateDisplayName(
-                              nameController.text.trim(),
-                            );
-
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(credential.user!.uid)
-                                .set({
-                                  'uid': credential.user!.uid,
-                                  'nickname': nameController.text.trim(),
-                                  'email': loginController.text.trim(),
-                                  'createdAt': FieldValue.serverTimestamp(),
-                                });
-
-                            if (!mounted) return;
-                            setState(() {
-                              error = null;
-                            });
-                          } catch (e) {
-                            if (!mounted) return;
-                            setState(() {
-                              error = errorMessage(e);
-                            });
-                          }
-                        }
-                      : null,
+                  onPressed: _isRegisterButtonEnabled ? _register : null,
                   child: Text(
-                    'Зарегестрироваться',
+                    'Зарегистрироваться',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -378,24 +358,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? 'Нет аккаунта? Зарегестрироваться'
                       : 'Уже есть аккаунт? Войти',
                 ),
-              ),
-            ),
-
-            SizedBox(height: 10),
-
-            Align(
-              child: TextButton(
-                onPressed: () async {
-                  try {
-                    await FirebaseAuth.instance.signInAnonymously();
-                  } catch (e) {
-                    if (!mounted) return;
-                    setState(() {
-                      error = errorMessage(e);
-                    });
-                  }
-                },
-                child: Text('Анонимный пользователь'),
               ),
             ),
           ],

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../data/auth_repository.dart';
 import '../../bloc/games_bloc.dart';
 import '../../bloc/games_event.dart';
 import '../../bloc/games_state.dart';
@@ -13,8 +14,6 @@ import '../widgets/error_banner.dart';
 import '../widgets/game_card.dart';
 import 'add_game_screen.dart';
 import 'game_details_screen.dart';
-
-import 'package:firebase_auth/firebase_auth.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -188,10 +187,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     SizedBox(width: 5),
 
                     ElevatedButton(
-                      onPressed: () async {
-                        await FirebaseAuth.instance.signOut();
-                      },
-                      child: Text('Выйти'),
+                      onPressed: () => context.read<AuthRepository>().signOut(),
+                      child: const Text('Выйти'),
                     ),
                   ],
                 ),
