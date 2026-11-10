@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Красная плашка с предупреждением — такая же, как поле ошибки на экране входа.
 class ErrorBanner extends StatelessWidget {
   final String message;
 
